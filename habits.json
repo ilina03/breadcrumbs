@@ -1,0 +1,7 @@
+{
+  "habits": [
+    { "id": "read",  "name": "Read" },
+    { "id": "gym",   "name": "Gym" },
+    { "id": "water", "name": "Water" }
+  ]
+}

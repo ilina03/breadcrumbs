@@ -1,0 +1,775 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#eeece6">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<title>breadcrumbs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Literata:opsz,wght@7..72,400;7..72,600;7..72,700&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#eeece6; --ink:#111; --ink2:#555; --rule:#111; --faint:#bbb8b0;
+  --serif:'Literata',Georgia,'Times New Roman',serif;
+  --mono:'IBM Plex Mono',ui-monospace,Menlo,monospace;
+  /* 50% ordered dither, like e-ink grey */
+  --dither:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='4' height='4'%3E%3Crect width='2' height='2' fill='%23111'/%3E%3Crect x='2' y='2' width='2' height='2' fill='%23111'/%3E%3C/svg%3E");
+  /* sparse dither for 'today' */
+  --dither-light:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='4' height='4'%3E%3Crect width='1' height='1' fill='%23111'/%3E%3C/svg%3E");
+}
+*{box-sizing:border-box;margin:0;padding:0;transition:none!important;animation:none}
+html{-webkit-text-size-adjust:100%}
+body{background:var(--paper);color:var(--ink);font-family:var(--serif);
+  min-height:100dvh;padding-bottom:calc(84px + env(safe-area-inset-bottom));-webkit-font-smoothing:antialiased}
+header{padding:calc(18px + env(safe-area-inset-top)) 18px 10px;max-width:480px;margin:0 auto;
+  display:flex;justify-content:space-between;align-items:baseline;border-bottom:2px solid var(--rule)}
+.site-title{font-family:var(--serif);font-weight:700;font-size:1.35rem;letter-spacing:-.01em}
+.site-sub{font-family:var(--mono);font-size:.72rem;color:var(--ink2);text-transform:uppercase;letter-spacing:.06em}
+.pixel-border,.pixel-divider{display:none}
+main{max-width:480px;margin:0 auto;padding:16px 18px}
+.card{padding:14px 0 20px;border-bottom:1px solid var(--rule)}
+.card:last-of-type{border-bottom:0}
+.card-title{font-family:var(--serif);font-size:1.6rem;font-weight:700;line-height:1.15;display:flex;gap:8px;align-items:baseline}
+.icon{display:none}
+.hint,.muted{font-family:var(--mono);font-size:.72rem;color:var(--ink2);line-height:1.6;margin-top:12px}
+button,.btn,input{font:inherit;color:var(--ink)}
+button,label.pbtn{cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+.pbtn{font-family:var(--mono);font-size:.8rem;letter-spacing:.05em;text-transform:uppercase;
+  display:block;width:100%;text-align:center;padding:12px;margin-top:10px;
+  background:var(--paper);border:2px solid var(--ink);border-radius:4px}
+.pbtn:active,.pbtn.big:not(.quiet){background:var(--ink);color:var(--paper)}
+.pbtn.big:not(.quiet):active{background:var(--paper);color:var(--ink)}
+.pbtn.big{padding:16px;font-size:.9rem}
+.pbtn.quiet{border-width:1px}
+input[type=text],input[type=password]{width:100%;padding:10px;margin-top:8px;background:transparent;
+  border:0;border-bottom:1px solid var(--ink);border-radius:0;font-family:var(--mono);font-size:.85rem}
+input:focus{outline:none;border-bottom-width:2px}
+/* grids */
+.grid{display:grid;gap:5px;align-items:center;margin-top:14px}
+.week{grid-template-columns:minmax(62px,auto) repeat(7,1fr)}
+.month{grid-template-columns:repeat(7,1fr)}
+.dow{text-align:center;font-family:var(--mono);font-size:.72rem;color:var(--ink2);line-height:1.25;display:flex;flex-direction:column}
+.dow small{font-size:.72rem;color:var(--ink)}
+.dow.today{color:var(--ink);font-weight:700}
+.dow.today small{background:var(--ink);color:var(--paper);border-radius:2px;margin:0 auto;padding:0 3px}
+.hname{background:none;border:0;text-align:left;font-family:var(--serif);font-weight:600;font-size:.95rem;padding:4px 0}
+.hname .arrow{font-family:var(--mono);color:var(--ink2)}
+.cell{aspect-ratio:1;border:1.5px solid var(--ink);border-radius:3px;background:var(--paper);
+  position:relative;display:flex;align-items:center;justify-content:center;
+  font-family:var(--mono);font-size:1rem;color:var(--paper)}
+.cell small{position:absolute;top:2px;left:4px;font-family:var(--mono);font-size:.65rem;color:var(--ink);
+  background:var(--paper);padding:0 2px;line-height:1.2}
+.cell.today{border-width:3px}
+.cell.done{background:var(--ink)}
+.cell.done::after{content:'✓';font-weight:700}
+.cell.done small{background:var(--ink);color:var(--paper)}
+.cell.today:not(.done){background-image:var(--dither-light)}
+.cell:disabled{border-style:dotted;border-color:var(--faint);cursor:default}
+/* detail */
+.dhead{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.ghost{background:none;border:0;font-family:var(--mono);font-size:.8rem;text-transform:uppercase;letter-spacing:.05em;padding:6px 4px}
+#d-prev,#d-next{font-size:1.1rem;padding:6px 10px;border:1.5px solid var(--ink);border-radius:3px;margin-left:6px}
+.stats{display:flex;margin-top:14px;border:1.5px solid var(--ink)}
+.stat{flex:1;padding:10px 12px}
+.stat+.stat{border-left:1.5px solid var(--ink)}
+.stat b{display:block;font-family:var(--serif);font-size:1.4rem;font-weight:700;line-height:1.1}
+.stat span{font-family:var(--mono);font-size:.68rem;text-transform:uppercase;letter-spacing:.06em;color:var(--ink2)}
+/* focus */
+.mode{text-align:center;font-family:var(--mono);font-size:.8rem;letter-spacing:.3em;margin-top:18px}
+.time{font-family:var(--serif);font-weight:700;font-size:6.2rem;line-height:1;text-align:center;
+  font-variant-numeric:tabular-nums lining-nums;letter-spacing:-.02em;margin:10px 0 18px}
+.bar{height:22px;border:2px solid var(--ink);border-radius:3px;padding:2px;background:var(--paper)}
+#f-bar{height:100%;width:0;background:var(--ink)}
+#f-bar.break{background:var(--dither)}
+#f-msg{text-align:center;min-height:1.5em;margin-top:12px;font-style:italic}
+.check{display:flex;gap:10px;align-items:center;font-family:var(--mono);font-size:.75rem;color:var(--ink2);margin-top:16px}
+.check input{accent-color:#111;width:18px;height:18px}
+.count{font-family:var(--mono);font-size:.85rem;text-align:center;margin-top:14px;letter-spacing:.1em}
+/* settings */
+details summary{font-family:var(--serif);font-size:1.15rem;font-weight:700;cursor:pointer;list-style:none}
+details summary::-webkit-details-marker{display:none}
+details summary::before{content:'▸ ';font-family:var(--mono)}
+details[open] summary::before{content:'▾ '}
+.sync-status{font-family:var(--mono);font-size:.72rem;color:var(--ink2);margin-top:8px}
+/* bottom nav: like an e-reader toolbar */
+nav{position:fixed;left:0;right:0;bottom:0;display:flex;justify-content:center;
+  background:var(--paper);border-top:2px solid var(--ink);padding-bottom:env(safe-area-inset-bottom)}
+nav button{flex:1;max-width:240px;font-family:var(--mono);font-size:.8rem;text-transform:uppercase;letter-spacing:.1em;
+  padding:16px 8px;background:var(--paper);border:0;color:var(--ink2)}
+nav button+button{border-left:1px solid var(--ink)}
+nav button.on{background:var(--ink);color:var(--paper)}
+footer{text-align:center;font-family:var(--mono);font-size:.7rem;color:var(--ink2);letter-spacing:.1em;margin-top:18px}
+/* e-ink full refresh: black flash, then paper */
+.refresh{position:fixed;inset:0;background:var(--ink);z-index:99;pointer-events:none;display:none}
+.refresh.on{display:block}
+.label{display:block;font-family:var(--mono);font-size:.7rem;text-transform:uppercase;letter-spacing:.08em;color:var(--ink2);margin-top:14px}
+.crumb{border:1.5px solid var(--ink);border-left-width:6px;border-radius:3px;padding:10px 12px;margin-top:12px}
+.crumb p{font-family:var(--serif);font-size:1rem;line-height:1.45;margin-top:4px}
+.crumb .label{margin-top:0}
+.crumb .pbtn{margin-top:10px}
+.chips{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px}
+.chip{border:1.5px solid var(--ink);border-radius:3px;padding:8px 10px;text-align:left;background:var(--paper);font-family:var(--serif)}
+.chip b{display:block;font-size:.95rem}
+.chip span{font-family:var(--mono);font-size:.7rem;color:var(--ink2)}
+.chip.on{background:var(--ink);color:var(--paper)}
+.chip.on span{color:var(--paper)}
+.custom{display:flex;gap:12px;margin-top:8px;font-family:var(--mono);font-size:.75rem}
+.custom input{width:56px;padding:6px;border:0;border-bottom:1px solid var(--ink);background:transparent;font-family:var(--mono);font-size:1rem;text-align:center}
+.plan{font-family:var(--mono);font-size:.78rem;text-align:center;margin-top:14px;letter-spacing:.03em}
+.row{display:flex;gap:8px}
+.crumbhead{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+.crumbhead .tools{white-space:nowrap;flex-shrink:0}
+.crumbhead .tools button{background:none;border:0;font-size:1.15rem;line-height:1;padding:4px 8px;min-width:34px;min-height:34px}
+.crumb textarea{margin-top:6px}
+.trail-head{background:none;border:0;padding:0;font-family:var(--serif);font-size:1.15rem;font-weight:700;text-align:left}
+.trail-item{border-bottom:1px solid var(--faint);padding:12px 0}
+.trail-item:last-child{border-bottom:0}
+.trail-item .meta{font-family:var(--mono);font-size:.7rem;color:var(--ink2);text-transform:uppercase;letter-spacing:.05em}
+.trail-item p{font-size:1rem;line-height:1.45;margin-top:4px}
+.row .pbtn{flex:1}
+textarea{width:100%;margin-top:10px;padding:10px;border:1.5px solid var(--ink);border-radius:3px;background:var(--paper);
+  font-family:var(--serif);font-size:1rem;line-height:1.4;resize:vertical;color:var(--ink)}
+textarea:focus,input:focus{outline:none}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<div class="refresh" id="refresh"></div>
+<header>
+  <div class="site-title">breadcrumbs</div>
+  <div class="site-sub" id="today-sub"></div>
+</header>
+
+<main>
+  <!-- HOME: this week -->
+  <section id="home">
+    <div class="card">
+      <div class="card-title"><span id="today-title"></span></div>
+      <div id="week" class="grid week"></div>
+      <p class="hint">tap a square to tick it · tap a habit for 4 weeks</p>
+    </div>
+
+    <div class="card">
+      <details id="settings">
+        <summary>sync &amp; backup</summary>
+        <div id="sync-off">
+          <p class="hint">connect your google sheet to sync phone + laptop. setup steps are in the readme.</p>
+          <input type="text" id="s-url" placeholder="web app url (ends in /exec)" autocomplete="off" autocapitalize="off" spellcheck="false">
+          <input type="password" id="s-secret" placeholder="secret" autocomplete="off">
+          <button class="pbtn" id="s-save">connect sheet</button>
+        </div>
+        <div id="sync-on" hidden>
+          <p class="hint">connected to your google sheet.</p>
+          <button class="pbtn" id="s-now">sync now</button>
+          <button class="pbtn quiet" id="s-off">disconnect</button>
+        </div>
+        <p class="sync-status" id="sync-status"></p>
+        <p class="hint" style="margin-top:16px">backups (work with or without sync):</p>
+        <button class="pbtn quiet" id="x-json">export backup (json)</button>
+        <button class="pbtn quiet" id="x-csv">export habits (csv)</button>
+        <button class="pbtn quiet" id="x-scsv">export focus sessions (csv)</button>
+        <label class="pbtn quiet">import backup<input type="file" id="i-json" accept=".json,application/json" hidden></label>
+      </details>
+    </div>
+    <footer>— made by ilina —</footer>
+  </section>
+
+  <!-- DETAIL: one habit, past 4 weeks -->
+  <section id="detail" hidden>
+    <div class="card">
+      <div class="dhead">
+        <button class="ghost" data-view="home">‹ week</button>
+        <div><button class="ghost" id="d-prev" aria-label="previous habit">◂</button><button class="ghost" id="d-next" aria-label="next habit">▸</button></div>
+      </div>
+      <div class="card-title"><span id="d-name"></span></div>
+      <div class="stats">
+        <div class="stat"><b id="d-total"></b><span>past 4 weeks</span></div>
+        <div class="stat"><b id="d-streak"></b><span>current streak</span></div>
+      </div>
+      <div id="month" class="grid month"></div>
+    </div>
+  </section>
+
+  <!-- TRAIL: all breadcrumbs -->
+  <section id="trail" hidden>
+    <div class="card">
+      <div class="dhead"><button class="ghost" data-view="focus">‹ focus</button></div>
+      <div class="card-title">all breadcrumbs</div>
+      <p class="hint" style="margin-top:4px">newest first. ✎ to edit, ✕ to delete. deleting a note keeps the session's minutes.</p>
+      <div id="trail-list"></div>
+    </div>
+  </section>
+
+  <!-- FOCUS: pomodoro -->
+  <section id="focus" hidden>
+    <!-- idle: pick a task + preset -->
+    <div class="card" id="f-setup">
+      <div class="card-title">focus</div>
+
+      <span class="label" style="margin-top:6px">timer</span>
+      <div class="chips" id="f-presets"></div>
+      <div class="custom" id="f-custom" hidden>
+        <label><input type="number" id="f-cf" min="1" max="180" inputmode="numeric"> min focus</label>
+        <label><input type="number" id="f-cb" min="0" max="60" inputmode="numeric"> min break</label>
+      </div>
+      <p class="plan" id="f-plan"></p>
+      <button id="f-start" class="pbtn big">start focus</button>
+      <label class="check"><input type="checkbox" id="f-wake" checked> keep screen on while timing</label>
+      <p class="count" id="f-count"></p>
+    </div>
+
+    <!-- recent breadcrumbs, newest first -->
+    <div class="card" id="f-recent" hidden>
+      <button class="trail-head" data-view="trail" id="f-trail-link">all breadcrumbs ›</button>
+      <div id="f-recent-list"></div>
+    </div>
+
+    <!-- running -->
+    <div class="card" id="f-run" hidden>
+      <p id="f-mode" class="mode">FOCUS</p>
+      <div id="f-time" class="time">25:00</div>
+      <div class="bar"><div id="f-bar"></div></div>
+      <p class="plan" id="f-next"></p>
+      <p id="f-msg"></p>
+      <div class="row">
+        <button id="f-more" class="pbtn quiet">+5 min</button>
+        <button id="f-stop" class="pbtn quiet">stop</button>
+      </div>
+      <div class="crumb" data-crumbbox hidden></div>
+    </div>
+
+    <!-- breadcrumb prompt (after a focus block ends or is stopped) -->
+    <div class="card" id="f-crumbcard" hidden>
+      <div class="card-title">leave a breadcrumb</div>
+      <p class="hint" style="margin-top:6px">a note for future you: where did you stop, and what's the very next tiny step?</p>
+      <textarea id="f-crumb" rows="3" placeholder="e.g. stopped at q4 of the chem set. next: re-read the example on p.112"></textarea>
+      <div class="row">
+        <button id="f-crumb-skip" class="pbtn quiet">skip</button>
+        <button id="f-crumb-save" class="pbtn">save</button>
+      </div>
+    </div>
+  </section>
+</main>
+
+<nav>
+  <button data-view="home" class="on">habits</button>
+  <button data-view="focus">focus</button>
+</nav>
+
+<script>
+// ---------- settings ----------
+const FOCUS_MS = 25 * 60e3;
+const BREAK_MS = 5 * 60e3;
+const DEFAULT_HABITS = [{id:'read',name:'Read'},{id:'gym',name:'Gym'},{id:'water',name:'Water'}];
+
+// ---------- helpers ----------
+const $ = s => document.querySelector(s);
+const pad = n => String(n).padStart(2, '0');
+// Local-date key (NOT toISOString, which is UTC and would give yesterday's date before 05:30 IST)
+const keyOf = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const midnight = d => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+const addDays = (d, n) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
+const DOW = ['sun','mon','tue','wed','thu','fri','sat'];
+const LETTER = ['S','M','T','W','T','F','S'];
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+// ---------- storage ----------
+const LS = {habits:'ht.habits', log:'ht.log', pomos:'ht.pomos', timer:'ht.timer', sync:'ht.sync', queue:'ht.queue', focus:'ht.focus', sessions:'ht.sessions'};
+const read = (k, fallback) => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : fallback; } catch { return fallback; } };
+const write = (k, v) => { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, JSON.stringify(v)); } catch {} };
+
+let habits = read(LS.habits, DEFAULT_HABITS);
+let log    = read(LS.log, {});     // { "2026-11-19": ["read","water"] }
+let pomos  = read(LS.pomos, {});   // { "2026-11-19": 3 }
+let timer  = read(LS.timer, null); // { mode:"focus"|"break", endsAt: ms }
+let sync   = read(LS.sync, null);  // { url, secret }  (Google Sheet sync, optional)
+let queue  = read(LS.queue, []);   // changes not yet sent to the sheet
+let sessions = read(LS.sessions, []); // [{id,date,start,mins,brk,task,crumb,finished}]
+let view = 'home', detailIdx = 0, lastDay = keyOf(new Date());
+
+// Without sync, the habit list comes from habits.json in the repo.
+// With sync, it comes from the "habits" tab of your Google Sheet.
+if (!sync) {
+  fetch('habits.json', {cache:'no-store'})
+    .then(r => r.ok ? r.json() : Promise.reject())
+    .then(j => {
+      const list = (j.habits || j).filter(h => h && h.id && h.name);
+      if (list.length) { habits = list; write(LS.habits, habits); render(); }
+    })
+    .catch(() => {});
+}
+
+// ---------- data changes (all go through applyOp so sync can replay them) ----------
+function applyOp(op) {
+  if (op.session) {
+    const i = sessions.findIndex(s => s.id === op.session.id);
+    if (i >= 0) sessions[i] = op.session; else sessions.push(op.session);
+    if (sessions.length > 300) sessions = sessions.slice(-300);
+  } else if ('pomos' in op) {
+    if (op.pomos) pomos[op.date] = op.pomos; else delete pomos[op.date];
+  } else {
+    const s = new Set(log[op.date] || []);
+    op.done ? s.add(op.id) : s.delete(op.id);
+    if (s.size) log[op.date] = [...s]; else delete log[op.date];
+  }
+}
+function change(op) {
+  applyOp(op);
+  write(LS.log, log); write(LS.pomos, pomos); write(LS.sessions, sessions);
+  queueOp(op);
+  render();
+}
+const isDone = (id, k) => (log[k] || []).includes(id);
+const toggle = (id, k) => change({date:k, id, done: !isDone(id, k)});
+
+function streak(id) {
+  let d = midnight(new Date());
+  if (!isDone(id, keyOf(d))) d = addDays(d, -1); // today not ticked yet doesn't break it
+  let n = 0;
+  while (isDone(id, keyOf(d))) { n++; d = addDays(d, -1); }
+  return n;
+}
+
+// ---------- google sheet sync ----------
+let syncing = false, syncAgain = false, syncDebounce = null;
+function setSyncStatus(t) { $('#sync-status').textContent = t; }
+function queueOp(op) {
+  if (!sync) return;
+  queue.push(op); write(LS.queue, queue);
+  clearTimeout(syncDebounce); syncDebounce = setTimeout(doSync, 800);
+}
+async function doSync() {
+  if (!sync) return;
+  if (syncing) { syncAgain = true; return; }
+  syncing = true; setSyncStatus('syncing…');
+  const sending = queue.slice();
+  try {
+    // text/plain avoids a CORS preflight, which Apps Script can't answer
+    const r = await fetch(sync.url, {method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body: JSON.stringify({secret: sync.secret, ops: sending})});
+    const j = await r.json();
+    if (j.error) throw new Error(j.error);
+    queue = queue.slice(sending.length); write(LS.queue, queue);
+    // The sheet is the source of truth; re-apply anything changed while we were waiting.
+    log = j.log || {}; pomos = j.pomos || {};
+    if (Array.isArray(j.sessions)) sessions = j.sessions;
+    queue.forEach(applyOp);
+    if (Array.isArray(j.habits) && j.habits.length) { habits = j.habits; write(LS.habits, habits); }
+    write(LS.log, log); write(LS.pomos, pomos); write(LS.sessions, sessions);
+    setSyncStatus(`synced ${new Date().toLocaleTimeString([], {hour:'numeric', minute:'2-digit'})}`);
+    render();
+  } catch (e) {
+    setSyncStatus(`couldn't sync (${e.message || 'offline'}). changes are saved on this device and will go up next time.`);
+  } finally {
+    syncing = false;
+    if (syncAgain) { syncAgain = false; doSync(); }
+  }
+}
+function connectSync() {
+  const url = $('#s-url').value.trim(), secret = $('#s-secret').value;
+  if (!/^https:\/\/script\.google\.com\/.+\/exec$/.test(url)) return setSyncStatus('that url should start with https://script.google.com/ and end with /exec');
+  if (!secret) return setSyncStatus('enter the secret you set in the script');
+  sync = {url, secret}; write(LS.sync, sync);
+  // push everything already on this device so nothing is lost
+  for (const [date, ids] of Object.entries(log)) ids.forEach(id => queue.push({date, id, done:true}));
+  for (const [date, n] of Object.entries(pomos)) queue.push({date, pomos:n});
+  sessions.forEach(session => queue.push({session}));
+  write(LS.queue, queue);
+  renderSyncUI(); doSync();
+}
+function disconnectSync() {
+  sync = null; queue = []; write(LS.sync, null); write(LS.queue, null);
+  setSyncStatus('disconnected. your data stays on this device.');
+  renderSyncUI();
+}
+function renderSyncUI() {
+  $('#sync-off').hidden = !!sync;
+  $('#sync-on').hidden = !sync;
+}
+
+// ---------- screens ----------
+function renderHome() {
+  const t = midnight(new Date()), tk = keyOf(t);
+  const mon = addDays(t, -((t.getDay() + 6) % 7));
+  const done = habits.filter(h => isDone(h.id, tk)).length;
+  $('#today-title').textContent = `${DOW[t.getDay()]}: ${done} of ${habits.length} done`;
+  let html = '<div></div>';
+  for (let i = 0; i < 7; i++) {
+    const d = addDays(mon, i);
+    html += `<div class="dow ${keyOf(d) === tk ? 'today' : ''}">${LETTER[d.getDay()]}<small>${d.getDate()}</small></div>`;
+  }
+  habits.forEach((h, hi) => {
+    html += `<button class="hname" data-detail="${hi}">${esc(h.name)} <span class="arrow">›</span></button>`;
+    for (let i = 0; i < 7; i++) {
+      const d = addDays(mon, i), k = keyOf(d);
+      html += `<button class="cell ${isDone(h.id, k) ? 'done' : ''} ${k === tk ? 'today' : ''}" ${d > t ? 'disabled' : ''}
+        data-h="${esc(h.id)}" data-k="${k}" aria-label="${esc(h.name)} ${k}"></button>`;
+    }
+  });
+  $('#week').innerHTML = html;
+}
+
+function renderDetail() {
+  const h = habits[detailIdx];
+  if (!h) { detailIdx = 0; return show('home'); }
+  const t = midnight(new Date()), tk = keyOf(t), start = addDays(t, -27);
+  $('#d-name').textContent = h.name;
+  let html = '', total = 0;
+  for (let i = 0; i < 7; i++) html += `<div class="dow">${LETTER[addDays(start, i).getDay()]}</div>`;
+  for (let i = 0; i < 28; i++) {
+    const d = addDays(start, i), k = keyOf(d), on = isDone(h.id, k);
+    if (on) total++;
+    html += `<button class="cell ${on ? 'done' : ''} ${k === tk ? 'today' : ''}" data-h="${esc(h.id)}" data-k="${k}" aria-label="${esc(h.name)} ${k}"><small>${d.getDate()}</small></button>`;
+  }
+  $('#month').innerHTML = html;
+  $('#d-total').textContent = `${total} of 28 days`;
+  const s = streak(h.id);
+  $('#d-streak').textContent = `${s} day${s === 1 ? '' : 's'}`;
+}
+
+// ---------- focus timer ----------
+const PRESETS = [
+  {id:'warm',    name:'warm-up', focus:10, brk:2,  note:'for getting started'},
+  {id:'short',   name:'short',   focus:15, brk:3,  note:''},
+  {id:'classic', name:'classic', focus:25, brk:5,  note:'pomodoro'},
+  {id:'deep',    name:'deep',    focus:50, brk:10, note:'for flow days'},
+  {id:'custom',  name:'custom',  focus:0,  brk:0,  note:''},
+];
+let fset = Object.assign({preset:'classic', custom:{focus:20, brk:5}, task:''}, read(LS.focus, {}));
+function currentPlan() {
+  if (fset.preset === 'custom') return {focus: clamp(fset.custom.focus, 1, 180), brk: clamp(fset.custom.brk, 0, 60)};
+  const p = PRESETS.find(p => p.id === fset.preset) || PRESETS[2];
+  return {focus: p.focus, brk: p.brk};
+}
+const clamp = (n, lo, hi) => Math.min(hi, Math.max(lo, Math.round(Number(n) || lo)));
+const fmtMin = m => m >= 60 && m % 60 === 0 ? `${m / 60} hr` : `${m} min`;
+const norm = s => String(s || '').trim().toLowerCase();
+
+// Stores an end time, not a countdown, so it stays right if the phone locks.
+let actx = null, wakeLock = null, pendingCrumb = null;
+function unlockAudio() {
+  try { actx = actx || new (window.AudioContext || window.webkitAudioContext)(); actx.resume(); } catch {}
+}
+function beep(times) {
+  if (!actx) return;
+  const t0 = actx.currentTime;
+  for (let i = 0; i < times; i++) {
+    const o = actx.createOscillator(), g = actx.createGain(), s = t0 + i * 0.35;
+    o.type = 'square'; o.frequency.value = 880; o.connect(g); g.connect(actx.destination);
+    g.gain.setValueAtTime(0.0001, s);
+    g.gain.exponentialRampToValueAtTime(0.25, s + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, s + 0.25);
+    o.start(s); o.stop(s + 0.3);
+  }
+}
+function alarm(kind) {
+  beep(kind === 'focus' ? 4 : 2);
+  if (navigator.vibrate) navigator.vibrate([300, 150, 300, 150, 300]);
+  einkRefresh(3);
+}
+async function keepAwake() {
+  try {
+    if ($('#f-wake').checked && 'wakeLock' in navigator && !wakeLock) {
+      wakeLock = await navigator.wakeLock.request('screen');
+      wakeLock.addEventListener('release', () => { wakeLock = null; });
+    }
+  } catch {}
+}
+function letSleep() { if (wakeLock) wakeLock.release(); wakeLock = null; }
+
+// sessions: one row per focus block, with its task and breadcrumb
+function latestCrumb() {
+  return sessions.filter(s => s.crumb).sort((a, b) => b.start.localeCompare(a.start))[0] || null;
+}
+const localStamp = ms => { const d = new Date(ms); return `${keyOf(d)} ${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+function logSession(t, finishedAt, finished) {
+  const mins = Math.round((finishedAt - t.startedAt) / 60000);
+  if (mins < 1) return null;
+  const s = {id: t.sessionId, date: keyOf(new Date(t.startedAt)), start: localStamp(t.startedAt),
+             mins, brk: Math.round(t.breakMs / 60000), task: t.task || '', crumb: '', finished};
+  change({session: s});
+  return s;
+}
+
+function startFocus() {
+  unlockAudio();
+  const plan = currentPlan(), task = '';
+  const now = Date.now();
+  timer = {mode:'focus', startedAt: now, endsAt: now + plan.focus * 60e3,
+           focusMs: plan.focus * 60e3, breakMs: plan.brk * 60e3, task,
+           sessionId: now.toString(36) + Math.random().toString(36).slice(2, 6)};
+  write(LS.timer, timer);
+  pendingCrumb = null; $('#f-msg').textContent = '';
+  keepAwake(); renderFocus();
+}
+function stopTimer() {
+  if (timer && timer.mode === 'focus') {
+    const s = logSession(timer, Date.now(), false);
+    if (s) pendingCrumb = s.id;
+  }
+  timer = null; write(LS.timer, timer); letSleep();
+  $('#f-msg').textContent = '';
+  renderFocus();
+}
+function addFive() {
+  if (!timer) return;
+  timer.endsAt += 5 * 60e3;
+  if (timer.mode === 'focus') timer.focusMs += 5 * 60e3; else timer.breakMs += 5 * 60e3;
+  write(LS.timer, timer); renderFocus();
+}
+function saveCrumb(skip) {
+  const text = $('#f-crumb').value.trim();
+  const s = sessions.find(s => s.id === pendingCrumb);
+  if (!skip && s && text) change({session: Object.assign({}, s, {crumb: text})});
+  pendingCrumb = null; $('#f-crumb').value = '';
+  renderFocus();
+}
+
+// ---------- breadcrumb display, edit, delete ----------
+let editingCrumb = null; // session id being edited (in a crumb box or the trail)
+function setCrumb(id, text) {
+  const s = sessions.find(s => s.id === id);
+  if (s) change({session: Object.assign({}, s, {crumb: text})});
+}
+function crumbEditor(id, text) {
+  return `<textarea data-edit-text="${esc(id)}" rows="3">${esc(text)}</textarea>
+    <div class="row"><button class="pbtn quiet" data-edit-cancel>cancel</button><button class="pbtn" data-edit-save="${esc(id)}">save</button></div>`;
+}
+function renderCrumbBoxes() {
+  const latest = latestCrumb();
+  document.querySelectorAll('[data-crumbbox]').forEach(box => {
+    // don't redraw a box while you're typing in it
+    if (box.contains(document.activeElement) && document.activeElement.tagName === 'TEXTAREA') return;
+    box.hidden = !latest || !!pendingCrumb;
+    // read-only while the timer runs: just the cue, nothing to fiddle with
+    const html = !latest ? '' : `<span class="label">your last breadcrumb</span><p>${esc(latest.crumb)}</p>`;
+    if (box.dataset.html !== html) { box.innerHTML = html; box.dataset.html = html; } // only redraw on change (timer ticks 4x/sec)
+  });
+  renderRecent();
+}
+const RECENT = 5; // breadcrumbs shown under the focus screen
+function crumbsNewestFirst() {
+  return sessions.filter(s => s.crumb).sort((a, b) => b.start.localeCompare(a.start));
+}
+function trailItem(s) {
+  const d = new Date(s.start.replace(' ', 'T'));
+  const when = isNaN(d) ? s.start : d.toLocaleString([], {weekday:'short', day:'numeric', month:'short', hour:'numeric', minute:'2-digit'}).toLowerCase();
+  return `<div class="trail-item"><div class="crumbhead"><span class="meta">${esc(when)} · ${s.mins} min${s.finished ? '' : ' · stopped early'}</span>
+    <span class="tools"><button data-edit="${esc(s.id)}" aria-label="edit breadcrumb" title="edit">✎</button><button data-del="${esc(s.id)}" aria-label="delete breadcrumb" title="delete">✕</button></span></div>
+    ${editingCrumb === s.id ? crumbEditor(s.id, s.crumb) : `<p>${esc(s.crumb)}</p>`}</div>`;
+}
+function renderTrail() {
+  const list = crumbsNewestFirst();
+  $('#trail-list').innerHTML = list.length ? list.map(trailItem).join('') : '<p class="hint">no breadcrumbs yet.</p>';
+}
+function renderRecent() {
+  const list = crumbsNewestFirst();
+  $('#f-recent').hidden = !list.length || !!timer || !!pendingCrumb;
+  $('#f-trail-link').textContent = `all breadcrumbs (${list.length}) ›`;
+  const box = $('#f-recent-list');
+  if (box.contains(document.activeElement) && document.activeElement.tagName === 'TEXTAREA') return;
+  box.innerHTML = list.slice(0, RECENT).map(trailItem).join('');
+}
+
+function timeText() {
+  const remain = timer ? Math.max(0, timer.endsAt - Date.now()) : currentPlan().focus * 60e3;
+  const s = Math.ceil(remain / 1000);
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
+  return [h ? `${h}:${pad(m)}:${pad(s % 60)}` : `${pad(m)}:${pad(s % 60)}`, remain];
+}
+function renderFocus() {
+  $('#f-setup').hidden = !!timer || !!pendingCrumb;
+  $('#f-run').hidden = !timer;
+  $('#f-crumbcard').hidden = !pendingCrumb;
+
+  if (timer) {
+    const [txt, remain] = timeText();
+    const isFocus = timer.mode === 'focus';
+    const total = isFocus ? timer.focusMs : timer.breakMs;
+    $('#f-mode').textContent = isFocus ? 'FOCUS' : 'BREAK';
+    $('#f-time').textContent = txt;
+    $('#f-bar').style.width = `${(1 - remain / total) * 100}%`;
+    $('#f-bar').className = isFocus ? '' : 'break';
+    const ends = new Date(timer.endsAt).toLocaleTimeString([], {hour:'numeric', minute:'2-digit'}).toLowerCase();
+    $('#f-next').textContent = isFocus
+      ? (timer.breakMs ? `ends ${ends} · then ${fmtMin(timer.breakMs / 60e3)} break` : `ends ${ends} · no break`)
+      : `break ends ${ends}`;
+  } else {
+    // preset chips
+    $('#f-presets').innerHTML = PRESETS.map(p => {
+      const sub = p.id === 'custom' ? `${fset.custom.focus} / ${fset.custom.brk}` : `${p.focus} / ${p.brk}${p.note ? ' · ' + p.note : ''}`;
+      return `<button class="chip ${fset.preset === p.id ? 'on' : ''}" data-preset="${p.id}"><b>${p.name}</b><span>${sub}</span></button>`;
+    }).join('');
+    $('#f-custom').hidden = fset.preset !== 'custom';
+    const plan = currentPlan();
+    $('#f-plan').textContent = plan.brk
+      ? `${fmtMin(plan.focus)} focus → ${fmtMin(plan.brk)} break`
+      : `${fmtMin(plan.focus)} focus, no break`;
+    $('#f-start').textContent = `start ${fmtMin(plan.focus)} focus`;
+
+  }
+  renderCrumbBoxes();
+  const n = pomos[keyOf(new Date())] || 0;
+  const mins = sessions.filter(s => s.date === keyOf(new Date())).reduce((a, s) => a + s.mins, 0);
+  $('#f-count').textContent = n || mins ? `${'■ '.repeat(Math.min(n, 8)).trim()} ${n} done · ${mins} min focused today` : 'nothing yet today. a warm-up counts.';
+}
+function tick() {
+  let fired = null;
+  while (timer && Date.now() >= timer.endsAt) {
+    if (timer.mode === 'focus') {
+      const k = keyOf(new Date(timer.endsAt));
+      change({date:k, pomos:(pomos[k] || 0) + 1});
+      const s = logSession(timer, timer.endsAt, true);
+      if (s) pendingCrumb = s.id;
+      if (timer.breakMs > 0) { timer = Object.assign({}, timer, {mode:'break', endsAt: timer.endsAt + timer.breakMs}); fired = 'focus'; }
+      else { timer = null; fired = 'break'; }
+    } else { timer = null; fired = 'break'; }
+  }
+  if (fired) {
+    write(LS.timer, timer); alarm(fired); if (!timer) letSleep();
+    $('#f-msg').textContent = timer ? 'focus done. break time — leave a breadcrumb below.' : 'done. ready for another?';
+    renderFocus();
+  }
+  const today = keyOf(new Date());
+  if (today !== lastDay) { lastDay = today; render(); } // rolled past midnight
+  if (view === 'focus' && timer) renderFocus();
+  document.title = timer ? `${timeText()[0]} ${timer.mode}` : 'breadcrumbs';
+}
+setInterval(tick, 250);
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') { tick(); if (timer) keepAwake(); doSync(); }
+});
+
+// ---------- backup / export ----------
+function download(name, text, type) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([text], {type}));
+  a.download = name; document.body.append(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+}
+function exportJSON() {
+  const body = {version:2, exported:new Date().toISOString(), habits, log, pomos, sessions};
+  download(`breadcrumbs-backup-${keyOf(new Date())}.json`, JSON.stringify(body, null, 2), 'application/json');
+}
+function exportCSV() {
+  const keys = [...Object.keys(log), ...Object.keys(pomos)].sort();
+  const end = midnight(new Date());
+  let d = keys.length ? new Date(keys[0] + 'T00:00') : end;
+  const rows = [['date', ...habits.map(h => h.id), 'pomodoros'].join(',')];
+  for (; d <= end; d = addDays(d, 1)) {
+    const k = keyOf(d);
+    rows.push([k, ...habits.map(h => isDone(h.id, k) ? 1 : 0), pomos[k] || 0].join(','));
+  }
+  download(`breadcrumbs-habits-${keyOf(end)}.csv`, rows.join('\n') + '\n', 'text/csv');
+}
+function exportSessionsCSV() {
+  const q = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const rows = [['date','start','focus_min','break_min','breadcrumb','finished'].join(',')];
+  [...sessions].sort((a, b) => a.start.localeCompare(b.start))
+    .forEach(s => rows.push([s.date, s.start, s.mins, s.brk, q(s.crumb), s.finished ? 'yes' : 'stopped early'].join(',')));
+  download(`breadcrumbs-sessions-${keyOf(new Date())}.csv`, rows.join('\n') + '\n', 'text/csv');
+}
+function importJSON(file) {
+  const r = new FileReader();
+  r.onload = () => {
+    try {
+      const j = JSON.parse(r.result);
+      // merge, never replace, so an old backup can't erase newer ticks
+      for (const [date, ids] of Object.entries(j.log || {}))
+        ids.forEach(id => { if (!isDone(id, date)) { const op = {date, id, done:true}; applyOp(op); queueOp(op); } });
+      for (const [date, n] of Object.entries(j.pomos || {}))
+        if (n > (pomos[date] || 0)) { const op = {date, pomos:n}; applyOp(op); queueOp(op); }
+      (j.sessions || []).forEach(session => { if (session && session.id && !sessions.some(s => s.id === session.id)) { const op = {session}; applyOp(op); queueOp(op); } });
+      write(LS.log, log); write(LS.pomos, pomos); write(LS.sessions, sessions); render();
+      alert('backup imported.');
+    } catch { alert("that file doesn't look like a backup from this app"); }
+  };
+  r.readAsText(file);
+}
+
+// e-ink style full refresh: screen goes black for a blink, then redraws
+function einkRefresh(times = 1) {
+  const el = $('#refresh');
+  for (let i = 0; i < times; i++) {
+    setTimeout(() => el.classList.add('on'), i * 500);
+    setTimeout(() => el.classList.remove('on'), i * 500 + 180);
+  }
+}
+
+// ---------- navigation & events ----------
+function show(v) {
+  view = v;
+  for (const id of ['home', 'detail', 'focus', 'trail']) $('#' + id).hidden = id !== v;
+  document.querySelectorAll('nav button').forEach(b => b.classList.toggle('on', b.dataset.view === (v === 'detail' ? 'home' : v === 'trail' ? 'focus' : v)));
+  render(); window.scrollTo(0, 0);
+  einkRefresh();
+}
+function render() {
+  $('#today-sub').textContent = new Date().toLocaleDateString(undefined, {weekday:'long', day:'numeric', month:'long'}).toLowerCase();
+  if (view === 'home') renderHome();
+  else if (view === 'detail') renderDetail();
+  else if (view === 'trail') renderTrail();
+  else renderFocus();
+}
+
+document.addEventListener('click', e => {
+  const cell = e.target.closest('[data-k]');
+  if (cell && !cell.disabled) return toggle(cell.dataset.h, cell.dataset.k);
+  const ed = e.target.closest('[data-edit]');
+  if (ed) {
+    editingCrumb = ed.dataset.edit; render();
+    const t = [...document.querySelectorAll(`[data-edit-text="${CSS.escape(editingCrumb)}"]`)].find(t => t.offsetParent);
+    if (t) t.focus();
+    return;
+  }
+  if (e.target.closest('[data-edit-cancel]')) { editingCrumb = null; document.activeElement.blur(); return render(); }
+  const sv = e.target.closest('[data-edit-save]');
+  if (sv) {
+    const t = sv.closest('.crumb, .trail-item').querySelector('textarea'); // the editor this save button belongs to
+    editingCrumb = null; if (t) t.blur();
+    const text = t ? t.value.trim() : '';
+    return text ? setCrumb(sv.dataset.editSave, text) : render();
+  }
+  const del = e.target.closest('[data-del]');
+  if (del) {
+    if (confirm('delete this breadcrumb? the session still counts.')) { editingCrumb = null; setCrumb(del.dataset.del, ''); }
+    return;
+  }
+  const chip = e.target.closest('[data-preset]');
+  if (chip) { fset.preset = chip.dataset.preset; write(LS.focus, fset); return renderFocus(); }
+  const det = e.target.closest('[data-detail]');
+  if (det) { detailIdx = +det.dataset.detail; return show('detail'); }
+  const nav = e.target.closest('[data-view]');
+  if (nav) return show(nav.dataset.view);
+});
+$('#d-prev').onclick = () => { detailIdx = (detailIdx - 1 + habits.length) % habits.length; renderDetail(); };
+$('#d-next').onclick = () => { detailIdx = (detailIdx + 1) % habits.length; renderDetail(); };
+$('#f-start').onclick = startFocus;
+$('#f-stop').onclick = stopTimer;
+$('#f-more').onclick = addFive;
+$('#f-crumb-save').onclick = () => saveCrumb(false);
+$('#f-crumb-skip').onclick = () => saveCrumb(true);
+$('#f-cf').value = fset.custom.focus; $('#f-cb').value = fset.custom.brk;
+$('#f-cf').oninput = $('#f-cb').oninput = () => {
+  fset.custom = {focus: clamp($('#f-cf').value, 1, 180), brk: clamp($('#f-cb').value, 0, 60)};
+  write(LS.focus, fset); renderFocus();
+};
+$('#x-scsv').onclick = exportSessionsCSV;
+$('#f-wake').onchange = e => { if (e.target.checked && timer) keepAwake(); else if (!e.target.checked) letSleep(); };
+$('#x-json').onclick = exportJSON;
+$('#x-csv').onclick = exportCSV;
+$('#i-json').onchange = e => { if (e.target.files[0]) importJSON(e.target.files[0]); e.target.value = ''; };
+$('#s-save').onclick = connectSync;
+$('#s-now').onclick = doSync;
+$('#s-off').onclick = disconnectSync;
+
+renderSyncUI();
+show(timer ? 'focus' : 'home');
+tick();
+doSync();
+</script>
+</body>
+</html>
